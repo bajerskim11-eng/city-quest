@@ -1,7 +1,7 @@
 name: Deploy game to GitHub Pages
 on:
   push:
-    branches: [ar-mvp]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
