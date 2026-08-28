@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Beboki Katowice — Gra Terenowa AR</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,sans-serif;background:#111;color:#fff}
+    #hud{position:fixed;z-index:20;inset:0;pointer-events:none;padding:16px}
+    .top{display:flex;justify-content:space-between;gap:10px}.pill{background:#111c;border:1px solid #ffffff30;border-radius:999px;padding:9px 13px;backdrop-filter:blur(8px)}
+    #panel{position:fixed;z-index:30;left:16px;right:16px;bottom:16px;background:#111e;border:1px solid #ffffff25;border-radius:20px;padding:16px;backdrop-filter:blur(14px)}
+    h1{font-size:22px;margin:0 0 6px}.muted{opacity:.75;font-size:14px}.quest{display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px;background:#ffffff0d;border-radius:14px}
+    .avatar{width:52px;height:52px;border-radius:14px;object-fit:cover}.btn{pointer-events:auto;border:0;border-radius:12px;padding:12px 16px;background:#fff;color:#111;font-weight:700}.btn:disabled{opacity:.45}
+    #start{position:fixed;z-index:50;inset:0;display:grid;place-items:center;background:linear-gradient(#111d,#111);padding:24px}.card{max-width:420px;background:#181818;border:1px solid #ffffff20;border-radius:24px;padding:24px;box-shadow:0 20px 80px #0008}
+    #scene{display:none}
+  </style>
+</head>
+<body>
+<div id="start"><div class="card"><div class="muted">BEBOKI KATOWICE</div><h1>Misja miejska zaczyna się tutaj.</h1><p>Idź do wskazanych miejsc. Gdy znajdziesz się wystarczająco blisko, odblokuje się Bebok w AR.</p><button class="btn" id="startBtn">START MISJI</button><p class="muted">GPS i kamera są potrzebne do działania.</p></div></div>
+<div id="hud"><div class="top"><div class="pill">🧭 <span id="status">Czekam na GPS…</span></div><div class="pill">⭐ <span id="score">0</span></div></div></div>
+<div id="panel"><h1 id="locationName">Wybierz cel</h1><div class="muted" id="distance">—</div><div class="quest"><img id="avatar" class="avatar" alt="Bebok" /><div><b id="bebokName">Bebok</b><div class="muted" id="story">Podejdź do punktu.</div></div></div><button class="btn" id="arBtn" disabled>ODPAL AR</button></div>
+<a-scene id="scene" vr-mode-ui="enabled:false" embedded renderer="antialias:true; alpha:true" arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;">
+  <a-camera gps-new-camera="gpsMinDistance:5" rotation-reader></a-camera>
+</a-scene>
+<script>
+const ASSET='https://raw.githubusercontent.com/bajerskim11-eng/beboki-katowice-mis/main/public/beboki/';
+const names={hanys:'Hanys',fachura:'Fachura',hopla:'Hopla',podciep:'Podciep'};
+const locations=[
+ {id:'spodek',name:'Spodek',lat:50.2658,lon:19.0244,bebok:'hanys',radius:80,story:'Hanys pilnuje pierwszego śladu.'},
+ {id:'rynek',name:'Rynek Katowice',lat:50.2597,lon:19.0218,bebok:'fachura',radius:80,story:'Fachura ma dla Ciebie zadanie.'},
+ {id:'mariacka',name:'Ulica Mariacka',lat:50.2569,lon:19.0267,bebok:'hopla',radius:80,story:'Hopla ukryła się w centrum miasta.'},
+ {id:'podciep',name:'Strefa testowa Podciepa',lat:50.2625,lon:19.0200,bebok:'podciep',radius:80,story:'Podciep czeka na finałową próbę.'}
+];
+let pos=null,current=null,score=0,unlocked=new Set();
+const $=id=>document.getElementById(id);
+function dist(a,b){const R=6371000,p=Math.PI/180,dLat=(b.lat-a.lat)*p,dLon=(b.lon-a.lon)*p;const x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function selectNearest(){if(!pos)return;let ranked=locations.map(x=>({...x,d:dist(pos,x)})).sort((a,b)=>a.d-b.d);current=ranked.find(x=>!unlocked.has(x.id))||ranked[0];$('locationName').textContent=current.name;$('distance').textContent=`${Math.round(current.d)} m od celu`;$('bebokName').textContent=names[current.bebok];$('story').textContent=current.story;$('avatar').src=ASSET+current.bebok+'.jpeg';$('arBtn').disabled=current.d>current.radius;$('status').textContent=current.d<=current.radius?'CEL ODBLOKOWANY':'Idź do celu';}
+function unlock(){if(!current||current.d>current.radius)return;unlocked.add(current.id);score+=100;$('score').textContent=score;$('story').textContent='Bebok jest blisko. Uruchom kamerę i rozejrzyj się!';$('arBtn').disabled=false;}
+function openAR(){
+  $('scene').style.display='block';$('panel').style.display='none';
+  const old=document.querySelector('[gps-new-entity-place]');if(old)old.remove();
+  const e=document.createElement('a-image');e.setAttribute('src',ASSET+current.bebok+'.jpeg');e.setAttribute('gps-new-entity-place',`latitude:${current.lat}; longitude:${current.lon}`);e.setAttribute('look-at','[gps-new-camera]');e.setAttribute('scale','20 20 20');e.setAttribute('position','0 0 0');document.querySelector('a-scene').appendChild(e);
+}
+$('startBtn').onclick=()=>{ $('start').style.display='none'; if(!navigator.geolocation){$('status').textContent='GPS niedostępny';return} navigator.geolocation.watchPosition(p=>{pos={lat:p.coords.latitude,lon:p.coords.longitude};selectNearest();if(current&&current.d<=current.radius)unlock()},e=>{$('status').textContent='Zezwól na lokalizację'}, {enableHighAccuracy:true,maximumAge:3000,timeout:15000});};
+$('arBtn').onclick=openAR;
+</script></body></html>
